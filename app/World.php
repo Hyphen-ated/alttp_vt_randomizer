@@ -1061,7 +1061,7 @@ abstract class World
             'insert into placements (seed_id, location_id, item_id, sphere, required) values ' . 
             '(:seed_id, :location_id, :item_id, :sphere, :required)');
         $insert_findable_without = $db->getPdo()->prepare(
-            'insert into findable_without (seed_id, item_id, items, locations) values ' .
+            'insert into findability (seed_id, item_id, items_findable_without, locations_findable_without) values ' .
             '(:seed_id, :item_id, :items, :locations)');                       
        
        
