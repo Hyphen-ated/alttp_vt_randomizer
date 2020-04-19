@@ -562,6 +562,9 @@ abstract class World
     }
     
     //hyphen stats project
+    // these "get findable without" functions are very similar to the sphere
+    // calculation in the vanilla rando. the difference is I stop target_location
+    // from ever being collected, and collect everything else I can.
     public function getItemsFindableWithoutLocation(Location $target_location) {
         $my_items = $this->pre_collected_items;    
         
@@ -1019,14 +1022,16 @@ abstract class World
         ];
             
     
-                 
+        //in the game, there are four items called "ProgressiveSword", for example.
+        //that's less convenient for me than having them named ProgressiveSword1 through 4    
+        //so I number them here in the order that I come across them       
         $progressive_counts = ['ProgressiveBow' => 0,
                                'ProgressiveGlove' => 0,
                                'ProgressiveSword' => 0,
                                'ProgressiveShield' => 0,
                                'ProgressiveArmor' => 0];
         $all_locations = [];
-        $location_items = [];        
+        $location_items = [];                
         $real_collectable_location_items = [];
         foreach ($this->getRegions() as $region) {
             foreach ($region->getLocations() as $location) {
@@ -1065,8 +1070,9 @@ abstract class World
             '(:seed_id, :item_id, :items, :locations)');                       
        
        
-       
+        //this function getLocationSpheres already existed, it returns a map of spheres to locations
         $spheres_to_locs = $this->getLocationSpheres();
+        //I'm inverting the map so I know the sphere of each location given its name
         $location_to_sphere = [];
         foreach ($spheres_to_locs as $sphere => $sphere_loc_coll) {
             $sphere_locs = $sphere_loc_coll->toArray();
@@ -1077,7 +1083,8 @@ abstract class World
                 }
             }
         }
-                
+        
+        //add locations and their contents to the db        
         foreach($location_items as $location_name => $item_name) {
             if (!array_key_exists($location_name, $known_location_names)) {
                 print("Unknown location: " . $location_name . "\n");
@@ -1089,11 +1096,17 @@ abstract class World
                 return false;
             }
             
+            //start by assuming each item isn't required            
+            //BUT if we see it's a progression item, we later assume it is required
+            //except then if the triforce is findable without it, that means it's not required after all.            
             $required_item = false;
               
-            //do findability stuff. 
+            //calculate and record which items/locations are findable without each other item/location
             if(   array_key_exists($item_name, $progression_items) 
                && array_key_exists($location_name, $real_collectable_location_items)) {
+                //they're represented as bit strings in the database, where each bit is
+                //set to 1 if the item or location with id equal to that bit's index
+                //can be found without collecting the current location
                 $findable_item_bitstring = str_repeat("0", count($known_item_names));
                 $findable_location_bitstring = str_repeat("0", count($known_location_names));
                            
