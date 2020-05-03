@@ -6,11 +6,6 @@ CREATE TABLE seeds
   CONSTRAINT seeds_pkey PRIMARY KEY (id)
 );
 
-CREATE INDEX seeds_hash_idx
-  ON seeds
-  USING btree
-  (hash COLLATE pg_catalog."default");
-  
   
 CREATE SEQUENCE location_id_seq; 
 CREATE TABLE locations
@@ -40,46 +35,105 @@ CREATE INDEX items_name_idx
   
 CREATE TABLE placements
 (
-  seed_id integer NOT NULL,
-  location_id smallint NOT NULL,
-  item_id smallint NOT NULL,
+  seed integer NOT NULL,
+  loc smallint NOT NULL,
+  item smallint NOT NULL,
   sphere smallint NOT NULL,
   required boolean NOT NULL,
-  CONSTRAINT placements_pkey PRIMARY KEY (seed_id, location_id)
+  locked_items bit(146),
+  locked_locs bit(236),
+  CONSTRAINT placements_pkey PRIMARY KEY (seed, loc)
 );
 
-CREATE TABLE findable_without
-(
-  seed_id integer NOT NULL,
-  item_id smallint NOT NULL,
-  items bit(146),
-  locations bit(236),
-  CONSTRAINT findable_without_pkey PRIMARY KEY (seed_id, item_id)
-);
+CREATE INDEX placements_loc_idx
+  ON placements
+  USING btree
+  (loc);
 
-CREATE OR REPLACE FUNCTION itemid(text)
+CREATE INDEX placements_item_idx
+  ON placements
+  USING btree
+  (item);
+  
+CREATE INDEX placements_sphere_idx
+  ON placements
+  USING btree
+  (sphere);
+  
+CREATE INDEX placements_required_idx
+  ON placements
+  USING btree
+  (required);
+
+
+CREATE FUNCTION itemid(text)
   RETURNS smallint AS
 'select id from items where name = $1;'
-  LANGUAGE sql VOLATILE
+  LANGUAGE sql STABLE
   COST 100;
   
-CREATE OR REPLACE FUNCTION itemname(smallint)
+CREATE FUNCTION itemname(smallint)
   RETURNS text AS
 'select name from items where id = $1;'
-  LANGUAGE sql VOLATILE
+  LANGUAGE sql STABLE
   COST 100;
 
-CREATE OR REPLACE FUNCTION locationid(text)
+CREATE FUNCTION locid(text)
   RETURNS smallint AS
 'select id from locations where name = $1;'
-  LANGUAGE sql VOLATILE
+  LANGUAGE sql STABLE
   COST 100;
   
-CREATE OR REPLACE FUNCTION locationname(smallint)
+CREATE FUNCTION locname(smallint)
   RETURNS text AS
 'select name from locations where id = $1;'
-  LANGUAGE sql VOLATILE
+  LANGUAGE sql STABLE
   COST 100;
+  
+CREATE FUNCTION item_in_bits(
+    text,
+    bit)
+  RETURNS boolean AS
+'select get_bit($2, itemid($1)-1) = 1'
+  LANGUAGE sql STABLE
+  COST 100;
+  
+CREATE FUNCTION loc_in_bits(
+    text,
+    bit)
+  RETURNS boolean AS
+'select get_bit($2, locid($1)-1) = 1'
+  LANGUAGE sql STABLE
+  COST 100;
+ 
+ 
+CREATE FUNCTION item_good(smallint)
+  RETURNS boolean AS
+$BODY$
+ select $1 in (itemid('ProgressiveBow'),
+                 itemid('Hookshot'),
+                 itemid('Mushroom'),
+                 itemid('Powder'),
+                 itemid('FireRod'),
+                 itemid('IceRod'),
+                 itemid('Bombos'),
+                 itemid('Ether'),
+                 itemid('Quake'),
+                 itemid('Lamp'),
+                 itemid('Hammer'),
+                 itemid('Shovel'),
+                 itemid('OcarinaInactive'),
+                 itemid('BookOfMudora'),
+                 itemid('CaneOfSomaria'),
+                 itemid('Cape'),
+                 itemid('MagicMirror'),
+                 itemid('PegasusBoots'),
+                 itemid('ProgressiveGlove'),
+                 itemid('ProgressiveSword'))
+                 $BODY$
+  LANGUAGE sql STABLE
+  COST 100;
+
 
 INSERT INTO locations (name)
 VALUES

@@ -983,6 +983,8 @@ abstract class World
         $progression_items = [
             "ProgressiveBow1" => true,
             "ProgressiveBow2" => true,
+            "Boomerang" => true,
+            "RedBoomerang" => true,            
             "Hookshot" => true,
             "Mushroom" => true,
             "Powder" => true,
@@ -995,15 +997,15 @@ abstract class World
             "Hammer" => true,
             "Shovel" => true,
             "OcarinaInactive" => true,
+            "BugCatchingNet" => true,
             "BookOfMudora" => true,
-            //todo: deal with the duplication issue on these
-//            "Bottle" => true,
-//            "BottleWithFairy" => true,
-//            "BottleWithRedPotion" => true,
-//            "BottleWithGreenPotion" => true,
-//            "BottleWithBluePotion" => true,
-//            "BottleWithBee" => true,
-//            "BottleWithGoldBee" => true,
+            "Bottle" => true,
+            "BottleWithFairy" => true,
+            "BottleWithRedPotion" => true,
+            "BottleWithGreenPotion" => true,
+            "BottleWithBluePotion" => true,
+            "BottleWithBee" => true,
+            "BottleWithGoldBee" => true,
             "CaneOfSomaria" => true,
             "CaneOfByrna" => true,
             "Cape" => true,
@@ -1017,7 +1019,50 @@ abstract class World
             "ProgressiveSword2" => true,
             "ProgressiveSword3" => true,
             "ProgressiveSword4" => true,
+            "ProgressiveShield1" => true,
+            "ProgressiveShield2" => true,
+            "ProgressiveShield3" => true,
             "HalfMagic" => true,
+            "BigKeyA1" => true,
+            "BigKeyA2" => true,
+            "BigKeyP1" => true,
+            "BigKeyP2" => true,
+            "BigKeyP3" => true,
+            "BigKeyD1" => true,
+            "BigKeyD2" => true,
+            "BigKeyD3" => true,
+            "BigKeyD4" => true,
+            "BigKeyD5" => true,
+            "BigKeyD6" => true,
+            "BigKeyD7" => true,
+            "BigKeyH1" => true,
+            "BigKeyH2" => true,
+            "KeyA1" => true,
+            "KeyA2" => true,
+            "KeyP1" => true,
+            "KeyP2" => true,
+            "KeyP3" => true,
+            "KeyD1" => true,
+            "KeyD2" => true,
+            "KeyD3" => true,
+            "KeyD4" => true,
+            "KeyD5" => true,
+            "KeyD6" => true,
+            "KeyD7" => true,
+            "KeyGK" => true,
+            "KeyH1" => true,
+            "KeyH2" => true,
+            "PendantOfCourage" => true,
+            "PendantOfWisdom" => true,
+            "PendantOfPower" => true,
+            "Crystal1" => true,
+            "Crystal2" => true,
+            "Crystal3" => true,
+            "Crystal4" => true,
+            "Crystal5" => true,
+            "Crystal6" => true,
+            "Crystal7" => true,
+            
             "DefeatAgahnim" => true
         ];
             
@@ -1063,11 +1108,9 @@ abstract class World
                 
         
         $insert_placement = $db->getPdo()->prepare(
-            'insert into placements (seed_id, location_id, item_id, sphere, required) values ' . 
-            '(:seed_id, :location_id, :item_id, :sphere, :required)');
-        $insert_findable_without = $db->getPdo()->prepare(
-            'insert into findability (seed_id, item_id, items_findable_without, locations_findable_without) values ' .
-            '(:seed_id, :item_id, :items, :locations)');                       
+            'insert into placements (seed, loc, item, sphere, required, locked_items, locked_locs) values ' . 
+            '(:seed, :loc, :item, :sphere, :required, :locked_items, :locked_locs)');
+                     
        
        
         //this function getLocationSpheres already existed, it returns a map of spheres to locations
@@ -1101,14 +1144,16 @@ abstract class World
             //except then if the triforce is findable without it, that means it's not required after all.            
             $required_item = false;
               
+            $locked_items = null;
+            $locked_locs = null;  
             //calculate and record which items/locations are findable without each other item/location
             if(   array_key_exists($item_name, $progression_items) 
                && array_key_exists($location_name, $real_collectable_location_items)) {
                 //they're represented as bit strings in the database, where each bit is
                 //set to 1 if the item or location with id equal to that bit's index
-                //can be found without collecting the current location
-                $findable_item_bitstring = str_repeat("0", count($known_item_names));
-                $findable_location_bitstring = str_repeat("0", count($known_location_names));
+                //is locked behind the current location
+                $locked_item_bitstring = str_repeat("1", count($known_item_names));
+                $locked_location_bitstring = str_repeat("1", count($known_location_names));
                            
 
                 $findable_locs_coll = $this->getLocationsFindableWithoutLocationName($location_name);
@@ -1121,36 +1166,33 @@ abstract class World
                     $findable_location_name = $found_location->getRawName();   
                     if(array_key_exists($findable_location_name, $known_location_names)) {                          
                         $loc_id = $known_location_names[$findable_location_name];
-                        $findable_location_bitstring[$loc_id - 1] = 1;
+                        $locked_location_bitstring[$loc_id - 1] = 0;
                                  
                         $findable_item_name = $location_items[$findable_location_name];
                         if ($findable_item_name === "Triforce") {
                             $required_item = false;
                         }
                         $item_id = $known_item_names[$findable_item_name];
-                        $findable_item_bitstring[$item_id - 1] = 1;
+                        $locked_item_bitstring[$item_id - 1] = 0;
 
                     }
                 }    
-                $insert_findable_without->bindValue(":seed_id", $new_seed_id);
-                $insert_findable_without->bindValue(":item_id", $known_item_names[$item_name]);
-                $insert_findable_without->bindValue(":items",  $findable_item_bitstring);
-                $insert_findable_without->bindValue(":locations", $findable_location_bitstring );
-                $insert_findable_without->execute();    
-                                                  
+                $locked_items = $locked_item_bitstring;
+                $locked_locs = $locked_location_bitstring;
+                                                                  
             } 
-            
-            
-            
+                                    
             $sphere = -1;
             if (array_key_exists($location_name, $location_to_sphere)) {
                 $sphere = $location_to_sphere[$location_name];
             }
-            $insert_placement->bindValue(':seed_id', $new_seed_id);
-            $insert_placement->bindValue(':location_id', $known_location_names[$location_name]);
-            $insert_placement->bindValue(':item_id', $known_item_names[$item_name]);
+            $insert_placement->bindValue(':seed', $new_seed_id);
+            $insert_placement->bindValue(':loc', $known_location_names[$location_name]);
+            $insert_placement->bindValue(':item', $known_item_names[$item_name]);
             $insert_placement->bindValue(':sphere', $sphere);
             $insert_placement->bindValue(':required', ($required_item ? 1 : 0));
+            $insert_placement->bindValue(':locked_items',  $locked_items);
+            $insert_placement->bindValue(':locked_locs', $locked_locs );  
             $insert_placement->execute();
                                     
             

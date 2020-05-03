@@ -47,7 +47,8 @@ class Randomize extends Command
         . ' {--hints=on : set hints on or off}'
         . ' {--item_pool=normal : set item pool}'
         . ' {--item_functionality=normal : set item functionality}'
-        . ' {--write-db-seed-data : write tons of info about the seed to postgres}';
+        . ' {--write-db-seed-data : write tons of info about the seed to postgres}'
+        . ' {--target_seed_count= : how many seeds you want to be in postgres when done}';
 
     /**
      * The console command description.
@@ -119,30 +120,37 @@ class Randomize extends Command
             return 101;
         }
 
-        //hyphen stats project
-        $known_hashes = [];
+        //hyphen stats project        
         if($this->option('write-db-seed-data')) {
             $db = DB::connection('pgsql');
             $known_location_names = $this->get_db_names($db, 'locations');
-            $known_item_names = $this->get_db_names($db, 'items');        
-            $db_hashes = $db->select('select hash from seeds');        
-            foreach ($db_hashes as $val) {
-                $known_hashes[$val->hash] = true;
-            } 
+            $known_item_names = $this->get_db_names($db, 'items');      
+            $ret = $db->select('select count(*) from seeds');   
+            $seed_count = $ret[0]->count;
         }
-        //print_r($known_hashes);
 
-        $bulk = (int) ($this->option('bulk') ?? 1);
+        $target_seed_count = $this->option('target_seed_count');
+        if(is_string($target_seed_count)) {
+            $count = (int)$target_seed_count;
+            if($seed_count >= $count) {
+                $this->error('db already has ' . $seed_count . ' seeds. (you asked for ' . $count . ")");
+                return 101;
+            }
+            
+            $bulk = $count - $seed_count;         
+        } else {
+
+            $bulk = (int) ($this->option('bulk') ?? 1);
+        }
         for ($i = 0; $i < $bulk; $i++) {
+            if ($i % 100 == 0) {
+                print($i + $seed_count . " seeds in db\n");
+            }
+                    
             Item::clearCache();
             Boss::clearCache();
             $rom = new Rom($this->argument('input_file'));
-            $hash = $hasher->encode((int) (microtime(true) * 1000));
-            
-            if (array_key_exists($hash, $known_hashes)) {
-                $this->info("Skipping duplicate hash " . $hash);
-                continue;
-            }
+            $hash = $hasher->encode((int) (microtime(true) * 1000));            
             
             if (!$this->option('skip-md5') && !$rom->checkMD5()) {
                 $rom->resize();
@@ -244,10 +252,7 @@ class Randomize extends Command
             
             //hyphen stats project
             if($this->option('write-db-seed-data')) {
-                if(array_key_exists($hash, $known_hashes)) {
-                    $this->info("Skipping duplicate hash " . $hash);
-                    continue;
-                }
+
                 $db->beginTransaction();
                 $bailOutFailure = !($world->writeToDb($db, $hash, $known_location_names, $known_item_names));
                 if ($bailOutFailure) {
@@ -259,6 +264,7 @@ class Randomize extends Command
                 }
             }
             
+
             
         }
     }
